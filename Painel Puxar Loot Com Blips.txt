@@ -123,7 +123,7 @@ end)
 local categories = {
     MOCHILAS = {{1974,"Field Green"},{1899,"Field Black"},{1909,"Field Camo"},{2150,"Coyote"}},
     COLETES  = {{1952,"Police Vest"},{1955,"Press Vest"}},
-    RIFLES   = {{2347,"AK74"},{2348,"AK101"},{2288,"SA-58"},{1509,"AKM"},{1950,"AUG"},{1951,"FAL"},{1512,"M4"},{1487,"M249"}},
+    RIFLES   = {{2347,"AK74"},{2348,"AK101"},{2288,"SA-58"},{1509,"AKM"},{1950,"AUG"},{1951,"FAL"},{1512,"M4"},{2782,"Scar"},{1487,"M249"}},
     SNIPERS  = {
         {{2613,2613},"Mosin"},
         {{1943,2268},"M70 Tundra"},
