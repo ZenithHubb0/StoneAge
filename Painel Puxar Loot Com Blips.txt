@@ -150,7 +150,7 @@ local categories = {
 
     CARRO    = {{2293,"Vela"},{2079,"Bateria"},{2224,"Radiador"},{1650,"Gasolina"}},
 
-    OUTROS   = {{5171,"Rádio"},{1581,"Cartão do Bunker"},{1589,"Roupa"}{2476,"Mina Terrestre"},{2565,"Kit de Limpeza de Arma"}},
+    OUTROS   = {{5171,"Rádio"},{1581,"Cartão do Bunker"},{1589,"Roupa"},{2476,"Mina Terrestre"},{2565,"Kit de Limpeza de Arma"}},
 
     PLATE    = { {{2053,1954,2869,1957,2500}, "Todos Plates"} },
 }
