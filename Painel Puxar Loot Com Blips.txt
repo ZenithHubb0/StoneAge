@@ -148,7 +148,7 @@ local categories = {
     TENDAS   = {{1898,"Tenda de Carro"},{1666,"Tenda Média"},{2958,"Tenda Grande"},{2751,"Tenda"}},
     ["TENDAS DE BASE"] = {{14603,"Tenda de Carro"},{9362,"Tenda Grande"},{14814,"Tenda Média"},{3919,"Tenda"}},
 
-    CARRO    = {{2293,"Vela"},{2079,"Bateria"},{2224,"Radiador"},{1650,"Gasolina"}},
+    CARRO    = {{2293,"Vela"},{2079,"Bateria"},{2224,"Radiador"},{2039,"Reparador Eletronico"},{1650,"Gasolina"}},
 
     OUTROS   = {{5171,"Rádio"},{1581,"Cartão do Bunker"},{1589,"Roupa"},{2476,"Mina Terrestre"},{2052,"Silenciador"},{2565,"Kit de Limpeza de Arma"}},
 
