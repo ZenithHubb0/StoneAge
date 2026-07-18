@@ -1,0 +1,97 @@
+--[[
+ESP de Objetos para MTA - Atalho: Tecla DEL
+Autor: HackerAI | Uso: Pentest autorizado
+]]
+
+local espEnabled = false
+local espRenderers = {}
+
+-- Cria o renderizador de um objeto
+local function createRenderer(obj)
+    if not isElement(obj) then return nil end
+    local id = getElementModel(obj)
+    
+    return {
+        object = obj,
+        objID = id,
+        render = function()
+            if not isElement(obj) then return end
+            
+            local x, y, z = getElementPosition(obj)
+            local sx, sy, visible = getScreenFromWorldPosition(x, y, z + 1.2, 0, true)
+            
+            if visible then
+                local dist = getDistanceBetweenPoints3D(x, y, z, getElementPosition(localPlayer))
+                local alpha = math.max(80, math.min(255, 255 - (dist / 40) * 175))
+                
+                local texto = string.format("[ID: %d]", id)
+                local largura = dxGetTextWidth(texto, 1.0, "default-bold")
+                
+                dxDrawRectangle(sx - largura/2 - 3, sy - 13, largura + 6, 18, tocolor(0, 0, 0, alpha * 0.65))
+                dxDrawText(texto, sx - largura/2 - 3, sy - 13, sx + largura/2 + 3, sy + 5, 
+                           tocolor(0, 255, 255, alpha), 1.0, "default-bold", "center", "center")
+                
+                dxDrawText(string.format("%.0fm", dist), sx - 40, sy + 5, sx + 40, sy + 18,
+                           tocolor(255, 255, 255, alpha * 0.7), 0.75, "default", "center", "top")
+            end
+        end
+    }
+end
+
+-- Atualiza a lista de objetos
+local function atualizarObjetos()
+    for i = #espRenderers, 1, -1 do
+        if not isElement(espRenderers[i].object) then
+            table.remove(espRenderers, i)
+        end
+    end
+    
+    local objs = getElementsByType("object")
+    local existentes = {}
+    for _, r in ipairs(espRenderers) do
+        existentes[r.object] = true
+    end
+    
+    for _, obj in ipairs(objs) do
+        if not existentes[obj] and isElement(obj) then
+            local r = createRenderer(obj)
+            if r then table.insert(espRenderers, r) end
+        end
+    end
+end
+
+-- Renderiza tudo
+local function onRender()
+    if not espEnabled then return end
+    for _, r in ipairs(espRenderers) do
+        if r.render then r.render() end
+    end
+end
+
+-- Alterna com a tecla DEL
+local function onKey(key, press)
+    if key == "delete" and press then
+        espEnabled = not espEnabled
+        
+        if espEnabled then
+            atualizarObjetos()
+            outputChatBox("[ESP] #00FFFFATIVADO #FFFFFF- Pressione #00FFFFDEL #FFFFFFnovamente para desativar", 0, 255, 255, true)
+            outputChatBox(string.format("[ESP] #00FFFF%d #FFFFFFobjetos encontrados", #espRenderers), 255, 255, 255, true)
+        else
+            outputChatBox("[ESP] #00FFFFDESATIVADO", 0, 255, 255, true)
+        end
+    end
+end
+
+-- Timer para atualizar objetos periodicamente
+setTimer(function()
+    if espEnabled then
+        atualizarObjetos()
+    end
+end, 3000, 0)
+
+-- Bind dos eventos
+addEventHandler("onClientRender", root, onRender)
+addEventHandler("onClientKey", root, onKey)
+
+outputChatBox("#00FFFF[ESP] #FFFFFFCarregado. Pressione #00FFFFDEL #FFFFFFpara ativar/desativar.", 0, 255, 255, true)
