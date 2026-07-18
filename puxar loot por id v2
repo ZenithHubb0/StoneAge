@@ -1,0 +1,353 @@
+-- ============================================
+-- PULL MANAGER - Interface GUI MTA
+-- Feito para executor MTA com GUI nativa
+-- ============================================
+
+local pullKey = "n"           -- tecla padrão para puxar
+local pullDistance = 30       -- distância máxima padrão
+local pullSpeed = 0.15        -- velocidade do puxão padrão
+local targetModel = 14603     -- modelo alvo padrão
+
+-- Estado
+local isActive = false
+local isWindowVisible = true
+
+-- ============================================
+-- GUI
+-- ============================================
+
+local window, editModel, editDist, editSpeed, editKey
+local btnToggle, btnSave, btnExtra, btnClose
+local listObjects, lblStatus
+local scrollPane
+
+function createGUI()
+    -- Janela principal
+    window = guiCreateWindow(0.3, 0.25, 0.4, 0.58, "Pull Manager - v1.0", true)
+    guiWindowSetMovable(window, true)
+    guiWindowSetSizable(window, false)
+
+    local sx, sy = guiGetSize(window, false)
+
+    -- ===== CONFIGURAÇÕES =====
+    guiCreateLabel(0.05, 0.06, 0.9, 0.04, "CONFIGURAÇÕES", true, window)
+
+    -- Modelo alvo
+    guiCreateLabel(0.05, 0.12, 0.2, 0.035, "Model ID:", true, window)
+    editModel = guiCreateEdit(0.25, 0.12, 0.2, 0.035, tostring(targetModel), true, window)
+
+    guiCreateLabel(0.5, 0.12, 0.2, 0.035, "Tecla:", true, window)
+    editKey = guiCreateEdit(0.7, 0.12, 0.2, 0.035, pullKey, true, window)
+
+    -- Distância
+    guiCreateLabel(0.05, 0.19, 0.2, 0.035, "Distância:", true, window)
+    editDist = guiCreateEdit(0.25, 0.19, 0.2, 0.035, tostring(pullDistance), true, window)
+
+    -- Velocidade
+    guiCreateLabel(0.5, 0.19, 0.2, 0.035, "Velocidade:", true, window)
+    editSpeed = guiCreateEdit(0.7, 0.19, 0.2, 0.035, tostring(pullSpeed), true, window)
+
+    -- ===== BOTÕES DE AÇÃO =====
+    btnToggle = guiCreateButton(0.05, 0.27, 0.28, 0.045, "▶ Ativar Pull", true, window)
+    btnSave   = guiCreateButton(0.37, 0.27, 0.28, 0.045, "💾 Salvar Config", true, window)
+    btnExtra  = guiCreateButton(0.05, 0.33, 0.6, 0.045, "⚡ Puxar Tudo Agora (Uma Vez)", true, window)
+    btnClose  = guiCreateButton(0.69, 0.27, 0.28, 0.045, "✕ Fechar", true, window)
+
+    -- ===== STATUS =====
+    lblStatus = guiCreateLabel(0.05, 0.40, 0.9, 0.035, "Status: Desligado (tecla: " .. pullKey .. ")", true, window)
+    guiLabelSetColor(lblStatus, 255, 100, 100)
+
+    -- ===== LISTA DE OBJETOS =====
+    guiCreateLabel(0.05, 0.46, 0.9, 0.035, "OBJETOS ENCONTRADOS (modelo alvo):", true, window)
+
+    -- ScrollPane + GridList para listar objetos
+    scrollPane = guiCreateScrollPane(0.05, 0.51, 0.9, 0.45, true, window)
+    listObjects = guiCreateGridList(0, 0, 1, 1, true, scrollPane)
+    guiGridListSetSortingEnabled(listObjects, false)
+
+    -- Colunas
+    guiGridListAddColumn(listObjects, "ID", 0.1)
+    guiGridListAddColumn(listObjects, "Posição X", 0.25)
+    guiGridListAddColumn(listObjects, "Posição Y", 0.25)
+    guiGridListAddColumn(listObjects, "Posição Z", 0.25)
+    guiGridListAddColumn(listObjects, "Distância", 0.15)
+
+    -- Ajustar tamanho do GridList ao ScrollPane
+    local spx, spy = guiGetSize(scrollPane, false)
+    guiSetSize(listObjects, spx, spy, false)
+
+    -- Resize automático do grid quando o scrollPane mudar
+    addEventHandler("onClientGUISize", scrollPane, function()
+        local spx2, spy2 = guiGetSize(scrollPane, false)
+        guiSetSize(listObjects, spx2, spy2, false)
+    end)
+
+    -- ===== EVENTOS DOS BOTÕES =====
+    addEventHandler("onClientGUIClick", btnToggle, handlerToggle, false)
+    addEventHandler("onClientGUIClick", btnSave, handlerSave, false)
+    addEventHandler("onClientGUIClick", btnExtra, handlerExtra, false)
+    addEventHandler("onClientGUIClick", btnClose, handlerClose, false)
+
+    -- Atualiza lista periodicamente
+    setTimer(refreshObjectList, 2000, 0)
+
+    -- Mostrar janela
+    guiSetVisible(window, true)
+    showCursor(true)
+end
+
+-- ============================================
+-- MANIPULADORES
+-- ============================================
+
+function handlerToggle()
+    if isActive then
+        desativarPull()
+    else
+        ativarPull()
+    end
+end
+
+function handlerSave()
+    local newModel = tonumber(guiGetText(editModel))
+    local newDist = tonumber(guiGetText(editDist))
+    local newSpeed = tonumber(guiGetText(editSpeed))
+    local newKey = guiGetText(editKey):lower()
+
+    -- Validações
+    if not newModel or newModel < 0 then
+        guiSetText(lblStatus, "Erro: Model ID inválido!")
+        guiLabelSetColor(lblStatus, 255, 0, 0)
+        return
+    end
+    if not newDist or newDist <= 0 then
+        guiSetText(lblStatus, "Erro: Distância inválida!")
+        guiLabelSetColor(lblStatus, 255, 0, 0)
+        return
+    end
+    if not newSpeed or newSpeed <= 0 or newSpeed > 1 then
+        guiSetText(lblStatus, "Erro: Velocidade inválida! (0.01 - 1.0)")
+        guiLabelSetColor(lblStatus, 255, 0, 0)
+        return
+    end
+    if #newKey == 0 then
+        guiSetText(lblStatus, "Erro: Tecla inválida!")
+        guiLabelSetColor(lblStatus, 255, 0, 0)
+        return
+    end
+
+    -- Rebind se estava ativo
+    local wasActive = isActive
+    if isActive then
+        desativarPull()
+    end
+
+    -- Aplicar
+    targetModel = newModel
+    pullDistance = newDist
+    pullSpeed = newSpeed
+    pullKey = newKey
+
+    -- Se estava ativo, reativa
+    if wasActive then
+        ativarPull()
+    end
+
+    guiSetText(lblStatus, "Configuração salva! Modelo: " .. targetModel .. " | Tecla: " .. pullKey)
+    guiLabelSetColor(lblStatus, 100, 255, 100)
+    refreshObjectList()
+end
+
+function handlerExtra()
+    -- Puxa todos os objetos uma única vez (modo instantâneo)
+    local px, py, pz = getElementPosition(localPlayer)
+    local modelAtual = tonumber(guiGetText(editModel)) or targetModel
+    local distAtual = tonumber(guiGetText(editDist)) or pullDistance
+    local count = 0
+
+    for _, obj in ipairs(getElementsByType("object")) do
+        if getElementModel(obj) == modelAtual then
+            local ox, oy, oz = getElementPosition(obj)
+            local dist = getDistanceBetweenPoints3D(px, py, pz, ox, oy, oz)
+
+            if dist <= distAtual then
+                -- Puxa direto pra perto do jogador
+                setElementPosition(obj, px, py, pz)
+                count = count + 1
+            end
+        end
+    end
+
+    guiSetText(lblStatus, "Puxão único! " .. count .. " objetos movidos para sua posição.")
+    guiLabelSetColor(lblStatus, 255, 255, 0)
+    refreshObjectList()
+end
+
+function handlerClose()
+    if isActive then
+        desativarPull()
+    end
+    guiSetVisible(window, false)
+    showCursor(false)
+    destroyElement(window)
+end
+
+-- ============================================
+-- LÓGICA DO PULL
+-- ============================================
+
+local renderHandler = nil
+
+function ativarPull()
+    if isActive then return end
+
+    -- Lê valores atuais dos campos
+    local m = tonumber(guiGetText(editModel)) or targetModel
+    local d = tonumber(guiGetText(editDist)) or pullDistance
+    local s = tonumber(guiGetText(editSpeed)) or pullSpeed
+    local k = guiGetText(editKey):lower() or pullKey
+
+    targetModel = m
+    pullDistance = d
+    pullSpeed = s
+    pullKey = k
+
+    -- Remove binds antigos primeiro
+    if renderHandler then
+        removeEventHandler("onClientRender", root, renderHandler)
+        renderHandler = nil
+    end
+
+    -- Cria o handler
+    renderHandler = function()
+        pullNearbyObjects()
+    end
+
+    -- Bind das teclas
+    unbindKey(pullKey, "down", startPull)
+    unbindKey(pullKey, "up", stopPull)
+    bindKey(pullKey, "down", startPull)
+    bindKey(pullKey, "up", stopPull)
+
+    isActive = true
+    guiSetText(btnToggle, "⏹ Desativar Pull")
+    guiSetText(lblStatus, "Status: Ativo (segure " .. pullKey:upper() .. " para puxar)")
+    guiLabelSetColor(lblStatus, 100, 255, 100)
+end
+
+function desativarPull()
+    if not isActive then return end
+
+    -- Remove render handler
+    if renderHandler then
+        removeEventHandler("onClientRender", root, renderHandler)
+        renderHandler = nil
+    end
+
+    -- Unbind das teclas
+    unbindKey(pullKey, "down", startPull)
+    unbindKey(pullKey, "up", stopPull)
+
+    isActive = false
+    guiSetText(btnToggle, "▶ Ativar Pull")
+    guiSetText(lblStatus, "Status: Desligado (tecla: " .. pullKey .. ")")
+    guiLabelSetColor(lblStatus, 255, 100, 100)
+end
+
+function startPull()
+    if renderHandler then
+        addEventHandler("onClientRender", root, renderHandler)
+    end
+end
+
+function stopPull()
+    if renderHandler then
+        removeEventHandler("onClientRender", root, renderHandler)
+    end
+end
+
+-- ============================================
+-- FUNÇÃO PRINCIPAL DE PULL
+-- ============================================
+
+function pullNearbyObjects()
+    local px, py, pz = getElementPosition(localPlayer)
+
+    for _, obj in ipairs(getElementsByType("object")) do
+        if getElementModel(obj) == targetModel then
+            local ox, oy, oz = getElementPosition(obj)
+            local dist = getDistanceBetweenPoints3D(px, py, pz, ox, oy, oz)
+
+            if dist <= pullDistance then
+                local nx = ox + (px - ox) * pullSpeed
+                local ny = oy + (py - oy) * pullSpeed
+                local nz = oz + (pz - oz) * pullSpeed
+
+                setElementPosition(obj, nx, ny, nz)
+            end
+        end
+    end
+end
+
+-- ============================================
+-- LISTA DE OBJETOS
+-- ============================================
+
+function refreshObjectList()
+    if not isElement(listObjects) then return end
+
+    guiGridListClear(listObjects)
+
+    local px, py, pz = getElementPosition(localPlayer)
+    local count = 0
+    local modelAtual = tonumber(guiGetText(editModel)) or targetModel
+    local distAtual = tonumber(guiGetText(editDist)) or pullDistance
+
+    for _, obj in ipairs(getElementsByType("object")) do
+        if getElementModel(obj) == modelAtual then
+            local ox, oy, oz = getElementPosition(obj)
+            local dist = getDistanceBetweenPoints3D(px, py, pz, ox, oy, oz)
+
+            if dist <= distAtual * 3 then -- mostra num raio maior
+                local row = guiGridListAddRow(listObjects)
+                guiGridListSetItemText(listObjects, row, 1, tostring(getElementData(obj, "id") or tostring(obj:getID())), false, false)
+                guiGridListSetItemText(listObjects, row, 2, string.format("%.2f", ox), false, false)
+                guiGridListSetItemText(listObjects, row, 3, string.format("%.2f", oy), false, false)
+                guiGridListSetItemText(listObjects, row, 4, string.format("%.2f", oz), false, false)
+                guiGridListSetItemText(listObjects, row, 5, string.format("%.2f", dist), false, false)
+                count = count + 1
+            end
+        end
+    end
+end
+
+-- ============================================
+-- INICIALIZAÇÃO
+-- ============================================
+
+addEventHandler("onClientResourceStart", resourceRoot, function()
+    createGUI()
+    outputChatBox("[PullManager] Carregado! Pressione PgDn para abrir/fechar a GUI.", 0, 255, 0)
+end)
+
+-- Tecla para toggle da GUI: PgDn (Page Down)
+bindKey("pgdn", "down", function()
+    if isElement(window) then
+        local visivel = not guiGetVisible(window)
+        guiSetVisible(window, visivel)
+        showCursor(visivel)
+    else
+        createGUI()
+    end
+end)
+
+-- Segurança: limpar ao sair
+addEventHandler("onClientResourceStop", resourceRoot, function()
+    if isActive then
+        desativarPull()
+    end
+    if isElement(window) then
+        destroyElement(window)
+    end
+    showCursor(false)
+end)
