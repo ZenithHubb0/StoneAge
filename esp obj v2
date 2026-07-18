@@ -1,0 +1,112 @@
+--[[
+ESP de Objetos para MTA - Modo Stealth (Invisível no Painel P)
+Tecla: DEL para ativar/desativar
+Sem elementos GUI - usa apenas dxDraw direto
+]]
+
+local espEnabled = false
+local espCache = {}
+local lastUpdate = 0
+local UPDATE_INTERVAL = 2000
+
+-- Função otimizada para renderizar texto 3D
+local function drawObjectESP(objeto, objID)
+    if not isElement(objeto) then return end
+    
+    local x, y, z = getElementPosition(objeto)
+    local sx, sy, visible = getScreenFromWorldPosition(x, y, z + 1.3, 0, true)
+    
+    if not visible then return end
+    
+    local px, py, pz = getElementPosition(localPlayer)
+    local dist = getDistanceBetweenPoints3D(x, y, z, px, py, pz)
+    
+    if dist > 150 then return end -- Limite de distância
+    
+    -- Calcula alpha baseado na distância (fica invisível de longe)
+    local alpha
+    if dist < 30 then
+        alpha = 255
+    elseif dist < 100 then
+        alpha = math.floor(255 - (dist - 30) * (155 / 70))
+    else
+        alpha = math.floor(100 - (dist - 100) * (100 / 50))
+    end
+    
+    if alpha < 30 then return end
+    
+    -- Texto: [ID: 1234]
+    local texto = string.format("[ID: %d]", objID)
+    local largura = dxGetTextWidth(texto, 0.9, "default-bold")
+    
+    -- Fundo sutil (quase invisível em screenshot)
+    dxDrawRectangle(sx - largura/2 - 2, sy - 11, largura + 4, 16, tocolor(0, 0, 0, math.floor(alpha * 0.35)))
+    
+    -- Texto em ciano claro
+    dxDrawText(texto, sx - largura/2 - 2, sy - 11, sx + largura/2 + 2, sy + 5,
+               tocolor(0, 220, 220, alpha), 0.9, "default-bold", "center", "center")
+    
+    -- Pequena linha indicadora abaixo (opcional, remover se quiser ainda mais stealth)
+    -- dxDrawRectangle(sx - 1, sy + 5, 2, 4, tocolor(0, 220, 220, math.floor(alpha * 0.3)))
+end
+
+-- Atualiza cache de objetos
+local function updateObjectCache()
+    local now = getTickCount()
+    if now - lastUpdate < UPDATE_INTERVAL then return end
+    lastUpdate = now
+    
+    -- Remove objetos destruídos
+    for i = #espCache, 1, -1 do
+        if not isElement(espCache[i].obj) then
+            table.remove(espCache, i)
+        end
+    end
+    
+    -- Cache de objetos existentes
+    local seen = {}
+    for _, entry in ipairs(espCache) do
+        seen[entry.obj] = true
+    end
+    
+    local objects = getElementsByType("object", root, true)
+    for _, obj in ipairs(objects) do
+        if not seen[obj] and isElement(obj) then
+            table.insert(espCache, {
+                obj = obj,
+                id = getElementModel(obj)
+            })
+        end
+    end
+end
+
+-- Render principal (sem GUI, só dxDraw)
+local function onRender()
+    if not espEnabled then return end
+    
+    updateObjectCache()
+    
+    for _, entry in ipairs(espCache) do
+        drawObjectESP(entry.obj, entry.id)
+    end
+end
+
+-- Handler da tecla DEL
+local function onKey(key, press)
+    if key == "delete" and press then
+        espEnabled = not espEnabled
+        
+        if espEnabled then
+            updateObjectCache()
+            -- Output invisível (não aparece pra outros nem em screenshot)
+            outputChatBox("", 0, 0, 0, false) -- Linha vazia só pra confirmar carregamento
+        end
+    end
+end
+
+-- Registro dos eventos
+addEventHandler("onClientRender", root, onRender)
+addEventHandler("onClientKey", root, onKey)
+
+-- Sinal silencioso de carregamento
+outputChatBox("", 0, 0, 0, false)
